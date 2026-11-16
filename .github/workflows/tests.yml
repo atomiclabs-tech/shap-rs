@@ -1,0 +1,102 @@
+# Exact-match checks against REAL shap 0.54.1.
+# - pytest: in-repo differential tests (shap vs shap_rs in the same process). Runs on every push and PR.
+# - fuzz (manual): make a ~2,000-case answer key with real shap on each OS, then replay it with shap_rs.patch()
+#   active (cheat guard on). Pass = every case matches and unpatch() restores shap.
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      fuzz:
+        description: "Also run the full fuzz answer-key check (slow)"
+        type: boolean
+        default: false
+jobs:
+  pytest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - if: runner.os == 'macOS'
+        run: brew install libomp
+      - name: install pinned deps + real shap
+        run: |
+          python -m pip install -q --upgrade pip
+          python -m pip install -q -r ci/requirements.txt shap==0.54.1 maturin==1.16.0 pytest catboost
+      - name: build shap_rs from source
+        run: |
+          maturin build --release -o wheels
+          python -m pip install -q wheels/*.whl
+      - name: pytest (live compare vs real shap)
+        run: python -m pytest -q -p no:cacheprovider tests
+  fuzz:
+    if: github.event_name == 'workflow_dispatch' && inputs.fuzz
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-15-intel]
+        python: ["3.12"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONUTF8: "1"
+      SHAP_FUZZ_CASES: ${{ github.workspace }}/cases-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - if: runner.os == 'macOS'
+        run: brew install libomp
+      - name: install pinned deps + real shap
+        run: |
+          python -m pip install -q --upgrade pip
+          python -m pip install -q -r ci/requirements.txt shap==0.54.1 maturin==1.16.0
+      - name: build shap_rs from source
+        run: |
+          maturin build --release -o wheels
+          python -m pip install -q wheels/*.whl
+      - name: answer key with real shap (4 parallel shards)
+        working-directory: fuzz
+        run: |
+          mkdir -p "$SHAP_FUZZ_CASES"
+          for r in "0 525" "525 1050" "1050 1575" "1575 2100"; do
+            python -u gen.py $r > "gen-${r// /-}.log" 2>&1 &
+          done
+          wait
+          echo "cases: $(ls "$SHAP_FUZZ_CASES" | wc -l)  skip: $(cat gen-*.log | grep -c SKIP)  err: $(cat gen-*.log | grep -c ' ERR ')"
+      - name: replay with shap_rs patched
+        working-directory: fuzz
+        run: |
+          python -u check.py | tee check.log
+          grep -q "unpatch restores shap.TreeExplainer: True" check.log
+          python - <<'EOF'
+          import re, sys
+          m = re.search(r"PASS (\d+)/(\d+)", open("check.log").read())
+          sys.exit(0 if m and m.group(1) == m.group(2) and int(m.group(2)) > 2000 else 1)
+          EOF
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-logs-${{ matrix.os }}
+          path: |
+            fuzz/*.log
+            fuzz/results-*.json

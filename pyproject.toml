@@ -1,0 +1,40 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "shap-rs"
+version = "0.1.0"
+description = "Fast SHAP values: a drop-in Rust engine for the shap library. Same values, 10-80x faster TreeSHAP for XGBoost, LightGBM and random forests."
+readme = "README.md"
+keywords = ["shap", "shap values", "shapley values", "explainable ai", "xai", "interpretability", "treeshap", "kernelshap", "xgboost", "lightgbm", "catboost", "random forest", "scikit-learn", "feature importance", "rust"]
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Atomic Labs LLC" }]
+dependencies = ["shap==0.54.1", "numpy>=2"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Rust",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/atomiclabs-tech/shap-rs"
+Repository = "https://github.com/atomiclabs-tech/shap-rs"
+Documentation = "https://github.com/atomiclabs-tech/shap-rs/blob/main/docs/USAGE.md"
+Issues = "https://github.com/atomiclabs-tech/shap-rs/issues"
+Benchmarks = "https://github.com/atomiclabs-tech/shap-rs#benchmarks"
+
+[tool.maturin]
+python-source = "python"
+module-name = "shap_rs._core"
+features = ["pyo3/extension-module"]
+include = [{ path = "LICENSE", format = "sdist" }]

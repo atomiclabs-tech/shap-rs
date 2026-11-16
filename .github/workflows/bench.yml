@@ -1,0 +1,51 @@
+# Speed check on clean GitHub runners: real shap 0.54.1 vs shap_rs (benchmarks/bench.py, which also checks
+# the max abs diff). Runs all cores, then shap_rs single-threaded (RAYON_NUM_THREADS=1).
+name: bench
+on:
+  workflow_dispatch:
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - if: runner.os == 'macOS'
+        run: brew install libomp
+      - name: machine
+        run: |
+          python -c "import os, platform; print(platform.platform(), platform.machine(), 'cpus:', os.cpu_count())"
+          (lscpu 2>/dev/null | grep -E "Model name|^CPU\(s\)") || sysctl -n machdep.cpu.brand_string
+      - name: install pinned deps + real shap
+        run: |
+          python -m pip install -q --upgrade pip
+          python -m pip install -q -r ci/requirements.txt shap==0.54.1 maturin==1.16.0
+      - name: build shap_rs from source
+        run: |
+          maturin build --release -o wheels
+          python -m pip install -q wheels/*.whl
+      - name: bench, all cores
+        working-directory: benchmarks
+        run: |
+          python -u bench.py | tee bench-all.log
+          cp bench.json bench-all-cores.json
+      - name: bench, shap_rs single thread
+        working-directory: benchmarks
+        env:
+          RAYON_NUM_THREADS: "1"
+        run: |
+          python -u bench.py | tee bench-1t.log
+          cp bench.json bench-1-thread.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ matrix.os }}
+          path: benchmarks/bench-*.json

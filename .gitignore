@@ -1,0 +1,13 @@
+target/
+*.so
+__pycache__/
+*.pyc
+.venv/
+dist/
+wheels/
+fuzz/cases/
+fuzz/*.log
+fuzz/results*.json
+benchmarks/bench*.json
+*.npz
+*.pkl
