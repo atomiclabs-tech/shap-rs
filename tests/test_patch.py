@@ -35,6 +35,6 @@ def test_version_guard(monkeypatch):
 
 
 def test_smoke_script():
-    smoke = Path(__file__).resolve().parents[1] / "extra" / "smoke.py"
+    smoke = Path(__file__).resolve().parents[1] / "examples" / "smoke.py"
     r = subprocess.run([sys.executable, str(smoke)], capture_output=True, text=True, timeout=600)
     assert r.returncode == 0, r.stdout + r.stderr
